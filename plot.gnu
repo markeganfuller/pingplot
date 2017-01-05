@@ -1,8 +1,9 @@
-name=system("echo $name")
+name=system("echo $TARGET")
+dataname=system("echo $PLOT_DATA")
 set title name
 
 set term dumb
 unset border
 unset xtics
 
-plot "plot.dat" using 1:2 with lines notitle
+plot dataname using 1:2 with lines notitle

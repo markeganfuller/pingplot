@@ -1,26 +1,31 @@
 #!/bin/bash
 
 TARGET=$1
+PING_LOG=$(mktemp --suffix=pingplot)
+PLOT_DATA=$(mktemp --suffix=pingplot)
+
+export TARGET
+export PLOT_DATA
 
 function clean_up () {
     trap '' EXIT ERR
     # Cleanup ping process
     kill $PING_PID
     # Cleanup files
-    rm ping.log -f
-    rm plot.dat -f
+    rm $PING_LOG -f
+    rm $PLOT_DATA -f
 }
 
 function read_log () {
     while true
     do
         # Process last 100 lines of log file
-        tail -n100 ping.log \
+        tail -n100 $PING_LOG \
             | awk '{print $7" "$9}' \
-            | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > plot.dat
+            | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > $PLOT_DATA
 
         # Plot data
-        name="Ping(ms) to $TARGET" gnuplot plot.gnu
+        gnuplot plot.gnu
         # Exit if something went wrong
         ret=$?
         if [ $ret -gt 0 ]; then
@@ -39,7 +44,7 @@ fi
 trap clean_up EXIT ERR
 
 
-ping $TARGET -D > ping.log &
+ping $TARGET -D > $PING_LOG &
 # Save PID for clean_up
 PING_PID=$!
 
