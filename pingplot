@@ -20,7 +20,11 @@ function read_log () {
     while true
     do
         # Process last 100 lines of log file
+        # Delete intro line (PING bbc.co.uk (212.58.244.22) 56(84) bytes of data.)
+        # awk seq and time
+        # remove labels and add tab
         tail -n100 $PING_LOG \
+            | sed "/PING/d" \
             | awk '{print $7" "$9}' \
             | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > $PLOT_DATA
 
