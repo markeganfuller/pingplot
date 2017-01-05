@@ -25,7 +25,7 @@ function read_log () {
         # remove labels and add tab
         tail -n100 $PING_LOG \
             | sed "/PING/d" \
-            | awk '{print $7" "$9}' \
+            | awk '{print $5" "$7}' \
             | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > $PLOT_DATA
 
         # Plot data
@@ -47,8 +47,8 @@ fi
 
 trap clean_up EXIT ERR
 
-
-ping $TARGET -D > $PING_LOG &
+# -n numeric only needed for different verions of ping
+ping $TARGET -n > $PING_LOG &
 # Save PID for clean_up
 PING_PID=$!
 
