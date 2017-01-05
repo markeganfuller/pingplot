@@ -1,0 +1,48 @@
+#!/bin/bash
+
+TARGET=$1
+
+function clean_up () {
+    trap '' EXIT ERR
+    # Cleanup ping process
+    kill $PING_PID
+    # Cleanup files
+    rm ping.log -f
+    rm plot.dat -f
+}
+
+function read_log () {
+    while true
+    do
+        # Process last 100 lines of log file
+        tail -n100 ping.log \
+            | awk '{print $7" "$9}' \
+            | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > plot.dat
+
+        # Plot data
+        name="Ping(ms) to $TARGET" gnuplot plot.gnu
+        # Exit if something went wrong
+        ret=$?
+        if [ $ret -gt 0 ]; then
+            exit 1
+        fi
+
+        sleep 1
+    done
+}
+
+if [ -z $1 ]; then
+    echo "$0 target"
+    exit 1
+fi
+
+trap clean_up EXIT ERR
+
+
+ping $TARGET -D > ping.log &
+# Save PID for clean_up
+PING_PID=$!
+
+sleep 3 # 3 guarantees we have 2 data points
+
+read_log
