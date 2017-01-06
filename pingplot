@@ -1,33 +1,80 @@
 #!/bin/bash
 
+usage="
+$0 [OPTS] TARGET
+
+Plot Ping Graphs
+
+
+-s Size             Number of pings to show in graph if 0 show all pings
+-k Keep Log         Keep log file after run
+-o Log filename     Output to specific log file
+"
+
+while getopts ":s:ko:" opt;
+do
+    case $opt in
+        s) SIZE=$OPTARG ;;
+        k) KEEP_LOG=true ;;
+        o) PING_LOG="./${OPTARG}" ;;
+        *) echo "Unrecognised option: $OPTARG"
+            echo "$usage"
+            exit 1 ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
 TARGET=$1
-PING_LOG=$(mktemp --suffix=pingplot)
+
+if [ -z $1 ]; then
+    echo "$usage"
+    exit 1
+fi
+
+
+TITLE="Ping(ms) From $(hostname) To ${TARGET}"
+SIZE=${SIZE:-100}
+KEEP_LOG=${KEEP_LOG:-false}
+PING_LOG=${PING_LOG:-$(mktemp --suffix=pingplot)}
 PLOT_DATA=$(mktemp --suffix=pingplot)
 
-export TARGET
+export TITLE
+export SIZE
 export PLOT_DATA
 
 function clean_up () {
-    trap '' EXIT ERR
+    trap '' EXIT ERR SIGINT
     # Cleanup ping process
     kill $PING_PID
     # Cleanup files
-    rm $PING_LOG -f
-    rm $PLOT_DATA -f
+    if $KEEP_LOG; then
+        echo
+        echo $PING_LOG
+        rm $PLOT_DATA -f
+    else
+        rm $PING_LOG -f
+        rm $PLOT_DATA -f
+    fi
+    exit 0
 }
 
-function read_log () {
-    while true
+function process_lines () {
+    while read line
     do
-        # Process last 100 lines of log file
         # Delete intro line (PING bbc.co.uk (212.58.244.22) 56(84) bytes of data.)
+        # Delete outro lines
         # awk seq and time
         # remove labels and add tab
-        tail -n100 $PING_LOG \
-            | sed "/PING/d" \
-            | awk '{print $5" "$7}' \
-            | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/' > $PLOT_DATA
+       echo $line \
+           | sed "/^PING/d" \
+           | sed "/^---/,+3d" \
+           | awk '{print $5" "$7}' \
+           | sed -e 's/icmp_seq=\|time=//g' -e 's/ /\t/'
+    done
+}
 
+function plot_data () {
         # Plot data
         gnuplot plot.gnu
         # Exit if something went wrong
@@ -35,15 +82,32 @@ function read_log () {
         if [ $ret -gt 0 ]; then
             exit 1
         fi
+}
 
+function read_log () {
+    while true
+    do
+        # Process last $SIZE lines of log file
+        tail -n$SIZE $PING_LOG \
+            | process_lines \
+            > $PLOT_DATA
+        plot_data
         sleep 1
     done
 }
 
-if [ -z $1 ]; then
-    echo "$0 target"
-    exit 1
-fi
+function read_log_continous () {
+    tail -f $PING_LOG \
+        | process_lines \
+        >> $PLOT_DATA \
+        &
+
+    while true
+    do
+        plot_data
+        sleep 1
+    done
+}
 
 trap clean_up EXIT ERR
 
@@ -54,4 +118,8 @@ PING_PID=$!
 
 sleep 3 # 3 guarantees we have 2 data points
 
-read_log
+if [ $SIZE -gt 0 ]; then
+    read_log
+else
+    read_log_continous
+fi
